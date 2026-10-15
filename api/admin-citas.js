@@ -6,20 +6,18 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // 1. Verificación de Seguridad del Superusuario
+  // 1. Verificación de Seguridad del Superusuario (Exclusivamente desde variable de entorno)
   const authHeader = req.headers['authorization'] || req.headers['x-admin-password'];
   const queryPass = req.query?.password || req.query?.pass;
   const rawProvidedPass = (authHeader ? authHeader.replace(/^Bearer\s+/i, '') : queryPass || '').toString().trim();
   const cleanProvidedPass = rawProvidedPass.replace(/["'\\]/g, '').trim();
 
-  const envPass = (process.env.VITE_ADMIN_PASS || process.env.ADMIN_PASS || '1234admin')
+  const envPass = (process.env.ADMIN_PASS || '')
     .replace(/["'\\]/g, '')
     .trim();
 
-  const isValid = cleanProvidedPass === envPass || cleanProvidedPass === '1234admin';
-
-  if (!isValid) {
-    return res.status(401).json({ error: 'Acceso no autorizado al panel de superusuario' });
+  if (!envPass || cleanProvidedPass !== envPass) {
+    return res.status(401).json({ error: 'Contraseña incorrecta. Acceso no autorizado.' });
   }
 
   try {

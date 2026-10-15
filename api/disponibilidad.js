@@ -68,12 +68,12 @@ export default async function handler(req, res) {
       return res.status(200).json({ disponibles: [] });
     }
 
-    // Franja de apertura activa (Turno Tarde Lunes a Viernes: 16:00 - 21:00)
+    // Franja de apertura activa (L-V: 16:00 - 21:00 | Sábados: 10:00 - 14:00)
     const ranges = [];
     if (dayOfWeek >= 1 && dayOfWeek <= 5) {
       ranges.push({ startH: 16, startM: 0, endH: 21, endM: 0 });
     } else if (dayOfWeek === 6) {
-      // Sábados bajo cita previa personalizada (sin huecos automatizados)
+      ranges.push({ startH: 10, startM: 0, endH: 14, endM: 0 });
     }
 
     if (ranges.length === 0) {

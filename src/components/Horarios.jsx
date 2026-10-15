@@ -55,10 +55,10 @@ const Horarios = () => {
             </div>
             <div className="flex flex-col">
               <span className="font-title-md text-[16px] font-bold text-on-surface">Sábados</span>
-              <span className="font-body-sm text-[12px] text-on-surface-variant">Fines de semana</span>
+              <span className="font-body-sm text-[12px] text-on-surface-variant">Turno Mañana</span>
             </div>
           </div>
-          <span className="font-body-md text-[14px] font-bold text-primary">Bajo Cita Previa</span>
+          <span className="font-headline-sm text-xl text-primary font-bold">10:00 - 14:00</span>
         </div>
       </div>
     </div>

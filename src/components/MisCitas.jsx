@@ -132,13 +132,15 @@ const MisCitas = ({ onClose }) => {
     setError('');
     setSuccessMsg('');
 
-    if (!phone || phone.length < 9) {
-      setError('Por favor, introduce un teléfono móvil válido.');
+    const formattedPhone = phone.replace(/\s+/g, '').trim();
+
+    if (!formattedPhone || formattedPhone.length < 9) {
+      setError('Por favor, introduce un teléfono móvil válido de al menos 9 dígitos.');
       return;
     }
 
     if (!pin || pin.length !== 4) {
-      setError('El PIN debe tener exactamente 4 dígitos.');
+      setError('El PIN debe tener exactamente 4 dígitos numéricos.');
       return;
     }
 
@@ -148,18 +150,18 @@ const MisCitas = ({ onClose }) => {
       const response = await fetch('/api/mis-citas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, pin })
+        body: JSON.stringify({ phone: formattedPhone, pin })
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Cita no encontrada o PIN incorrecto');
+        throw new Error(data.error || 'No se pudo consultar el calendario.');
       }
 
       const foundCita = data.cita || (data.citas && data.citas[0]);
       if (!foundCita) {
-        throw new Error('Cita no encontrada o PIN incorrecto');
+        throw new Error('No se encontraron citas para los datos facilitados.');
       }
 
       const newActive = {
@@ -168,7 +170,7 @@ const MisCitas = ({ onClose }) => {
         serviceName: foundCita.serviceName || (foundCita.summary ? foundCita.summary.replace(/^Cita:\s*[^–-]+[-–]\s*/i, '').replace(/^Cita:\s*/i, '').trim() : 'Servicio Barbería'),
         date: foundCita.date,
         time: foundCita.time,
-        phone: phone,
+        phone: formattedPhone,
         pin: pin
       };
 
@@ -176,15 +178,15 @@ const MisCitas = ({ onClose }) => {
       localStorage.setItem('tonin_cita_activa', 'true');
       localStorage.setItem('tonin_cita', JSON.stringify(newActive));
       localStorage.setItem('tonin_bookings', JSON.stringify([newActive]));
-      localStorage.setItem('tonin_cliente_telefono', phone);
+      localStorage.setItem('tonin_cliente_telefono', formattedPhone);
       localStorage.setItem('tonin_pin', pin);
 
       setCancelPin(pin);
-      setCancelPhone(phone);
+      setCancelPhone(formattedPhone);
       setActiveBooking(newActive);
       setSuccessMsg('¡Cita encontrada y guardada en este dispositivo!');
     } catch (err) {
-      setError(err.message || 'Cita no encontrada o PIN incorrecto');
+      setError(err.message || 'Error al buscar tu cita.');
     } finally {
       setLoading(false);
     }
@@ -213,7 +215,7 @@ const MisCitas = ({ onClose }) => {
             : 'Consulta tu cita con tu teléfono y PIN de 4 dígitos.'}
         </p>
 
-        {/* Mensajes de Feedback */}
+        {/* Mensajes de Feedback de Éxito */}
         {successMsg && (
           <div className="mb-4 p-3 bg-green-500/15 border border-green-500/30 text-green-400 rounded-xl text-xs sm:text-sm font-medium flex items-center gap-2 animate-in fade-in">
             <span className="material-symbols-outlined text-base">check_circle</span>
@@ -221,10 +223,29 @@ const MisCitas = ({ onClose }) => {
           </div>
         )}
 
+        {/* Mensaje de Error con Distinción Visual Clara (PIN vs Sin Cita) */}
         {error && (
-          <div className="mb-4 p-3 bg-error/20 border border-error/30 text-error rounded-xl text-xs sm:text-sm font-medium flex items-center gap-2 animate-in fade-in">
-            <span className="material-symbols-outlined text-base">error</span>
-            <span>{error}</span>
+          <div className={`mb-4 p-3.5 rounded-xl text-xs sm:text-sm font-medium flex items-start gap-2.5 animate-in fade-in border ${
+            error.toLowerCase().includes('pin') 
+              ? 'bg-amber-500/15 border-amber-500/35 text-amber-300' 
+              : 'bg-red-500/15 border-red-500/35 text-red-400'
+          }`}>
+            <span className="material-symbols-outlined text-lg flex-shrink-0 mt-0.5">
+              {error.toLowerCase().includes('pin') ? 'lock_reset' : 'event_busy'}
+            </span>
+            <div className="leading-snug">
+              <span className="block">{error}</span>
+              {error.includes('No tienes ninguna cita') && (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="mt-2 text-xs font-bold text-primary underline hover:text-amber-300 transition-colors cursor-pointer inline-flex items-center gap-1"
+                >
+                  <span>¿Deseas reservar una nueva cita?</span>
+                  <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                </button>
+              )}
+            </div>
           </div>
         )}
 

@@ -38,27 +38,14 @@ const Horarios = () => {
         <div className="flex items-center justify-between p-4 rounded-xl bg-surface-container-high/60">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center text-primary">
-              <span className="material-symbols-outlined text-[20px]">dark_mode</span>
-            </div>
-            <div className="flex flex-col">
-              <span className="font-title-md text-[16px] font-bold text-on-surface">Lunes a Viernes</span>
-              <span className="font-body-sm text-[12px] text-on-surface-variant">Turno Tarde</span>
-            </div>
-          </div>
-          <span className="font-headline-sm text-xl text-primary font-bold">16:00 - 21:00</span>
-        </div>
-
-        <div className="flex items-center justify-between p-4 rounded-xl bg-surface-container-high/60">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center text-primary">
               <span className="material-symbols-outlined text-[20px]">event_available</span>
             </div>
             <div className="flex flex-col">
               <span className="font-title-md text-[16px] font-bold text-on-surface">Sábados</span>
-              <span className="font-body-sm text-[12px] text-on-surface-variant">Turno Mañana</span>
+              <span className="font-body-sm text-[12px] text-on-surface-variant">Turno Tarde</span>
             </div>
           </div>
-          <span className="font-headline-sm text-xl text-primary font-bold">10:00 - 14:00</span>
+          <span className="font-headline-sm text-xl text-primary font-bold">16:00 - 21:00</span>
         </div>
       </div>
     </div>

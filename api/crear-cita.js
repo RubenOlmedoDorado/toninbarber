@@ -42,10 +42,13 @@ export default async function handler(req, res) {
     const calendar = google.calendar({ version: 'v3', auth });
     const calendarId = process.env.GOOGLE_CALENDAR_ID;
 
-    // Calcular horas
+    // Calcular horas (Margen de limpieza de 10 min invisible para el cliente)
+    const BUFFER_CLEANING_MINUTES = 10;
+    const duracionConMargen = Number(duracion) + BUFFER_CLEANING_MINUTES;
+
     const startDateTimeStr = `${date}T${time}:00`;
     const startDate = new Date(startDateTimeStr);
-    const endDate = new Date(startDate.getTime() + duracion * 60000);
+    const endDate = new Date(startDate.getTime() + duracionConMargen * 60000);
 
     const startDateTimeIso = startDate.toISOString();
     const endDateTimeIso = endDate.toISOString();
@@ -78,24 +81,30 @@ export default async function handler(req, res) {
     const m = startDate.getMinutes();
     const totalMins = h * 60 + m;
     
-    // Validar horario comercial
+    // Validar horario comercial (Solo tardes: 16:00 - 21:00)
     let isBusinessHours = false;
     if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-      if ((totalMins >= 11 * 60 && totalMins < 14 * 60) || (totalMins >= 16 * 60 && totalMins < 21 * 60)) {
-        isBusinessHours = true;
-      }
-    } else if (dayOfWeek === 6) {
-      if (totalMins >= 10 * 60 && totalMins < 14 * 60) {
+      if (totalMins >= 16 * 60 && totalMins < 21 * 60) {
         isBusinessHours = true;
       }
     }
     
     if (!isBusinessHours) {
-      return res.status(400).json({ error: 'Fuera de horario. Abre: L-V (11:00-14:00 / 16:00-21:00), Sab (10:00-14:00)' });
+      return res.status(400).json({ error: 'Fuera de horario. Disponible de Lunes a Viernes de 16:00 a 21:00 (Turno Tarde)' });
     }
 
     let hasOverlap = false;
     for (let ev of events) {
+      // Comprobar bloqueo por día libre o festivo
+      if (ev.summary) {
+        const summaryLower = ev.summary.toLowerCase();
+        if (summaryLower.includes('cerrado') || summaryLower.includes('libre')) {
+          return res.status(400).json({ 
+            error: 'La barbería está cerrada este día por festivo o descanso. Por favor, elige otra fecha.' 
+          });
+        }
+      }
+
       const evStart = new Date(ev.start.dateTime || ev.start.date);
       const evEnd = new Date(ev.end.dateTime || ev.end.date);
       
@@ -167,10 +176,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // 2. Generar Token
-    // Token removed, using event ID
-
-    // 3. Crear evento
+    // 2. Crear evento en Google Calendar
     const event = {
       summary: `Cita: ${name} - ${serviceName}`,
       description: `Telefono: ${phone}`,
@@ -184,8 +190,8 @@ export default async function handler(req, res) {
       },
       extendedProperties: {
         private: {
-          pin: pin,
-          phone: phone
+          phone: phone.toString().trim(),
+          pin: pin.toString().trim()
         }
       }
     };
@@ -193,7 +199,7 @@ export default async function handler(req, res) {
     try {
       const createdEvent = await calendar.events.insert({ calendarId, requestBody: event });
       res.status(200).json({ success: true, eventId: createdEvent.data.id });
-      console.log('Evento insertado (events.insert) exitosamente');
+      console.log('Evento insertado (events.insert) exitosamente con ID:', createdEvent.data.id);
     } catch (insertError) {
       console.error('Fallo en la insercion (events.insert):', insertError);
       throw insertError;

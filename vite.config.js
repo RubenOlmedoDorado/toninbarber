@@ -8,7 +8,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'logo.png', 'pwa-192x192.png', 'pwa-512x512.png'],
+      includeAssets: ['favicon.ico', 'logo.png', 'logo-tonin.png', 'pwa-192x192.png', 'pwa-512x512.png'],
       manifest: {
         name: 'Toñín Barber',
         short_name: 'Toñín Barber',

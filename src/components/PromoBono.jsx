@@ -40,15 +40,14 @@ const PromoBono = () => {
         </div>
       </div>
 
-      <a 
-        href="https://wa.me/?text=Hola%20Ton%C3%ADn!%20Quiero%20adquirir%20el%20Bono%20de%20Barber%C3%ADa"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="w-full py-4 px-6 rounded-xl bg-primary text-on-primary font-label-button text-[14px] font-bold tracking-wider uppercase flex items-center justify-center gap-3 shadow-[0_4px_20px_rgba(245,158,11,0.3)] hover:bg-primary-fixed transition-all"
-      >
-        <span className="material-symbols-outlined text-[22px]">card_giftcard</span>
-        <span>Adquirir Bono Ahora</span>
-      </a>
+      <div className="w-full py-5 px-6 rounded-xl bg-surface-container-high border border-primary/20 text-center shadow-inner">
+        <p className="font-title-md text-[16px] lg:text-[18px] font-bold tracking-wide text-primary mb-1">
+          ¿Quieres tu bono?
+        </p>
+        <p className="font-body-sm lg:font-body-md text-on-surface-variant">
+          Adquiere tu bono directamente en nuestro local consultando con el peluquero.
+        </p>
+      </div>
     </div>
   );
 };

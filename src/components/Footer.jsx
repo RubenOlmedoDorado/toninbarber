@@ -1,6 +1,45 @@
 import React from 'react';
 
 const Footer = () => {
+  const [cancelMessage, setCancelMessage] = React.useState(null);
+  const [savedBookings, setSavedBookings] = React.useState([]);
+
+  React.useEffect(() => {
+    try {
+      const bookings = JSON.parse(localStorage.getItem('tonin_bookings') || '[]');
+      // Filter out past bookings automatically? Simple approach: keep all, let the user cancel or let them pile up.
+      // Better: keep all for now to keep it simple.
+      setSavedBookings(bookings);
+    } catch (e) {
+      // Ignore
+    }
+  }, []);
+
+  const handleCancelSaved = async (token) => {
+    const confirmCancel = window.confirm('¿Estás seguro de que deseas cancelar esta reserva?');
+    if (!confirmCancel) return;
+    
+    setCancelMessage(null);
+    try {
+      const res = await fetch('/api/cancelar-cita', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token })
+      });
+      if(res.ok) {
+        setCancelMessage({ type: 'success', text: '✅ Cita cancelada con éxito.' });
+        const updatedBookings = savedBookings.filter(b => b.token !== token);
+        setSavedBookings(updatedBookings);
+        localStorage.setItem('tonin_bookings', JSON.stringify(updatedBookings));
+      } else {
+        setCancelMessage({ type: 'error', text: '❌ No se pudo cancelar (puede que ya haya pasado).' });
+        // Optionally remove if it failed because it's past, but we leave it for manual cleanup.
+      }
+    } catch(error) { 
+      setCancelMessage({ type: 'error', text: '❌ Error de conexión al cancelar la cita.' });
+    }
+  };
+
   return (
     <footer className="w-full bg-surface-container-lowest border-t border-outline-variant/20 pt-16 pb-12 mt-12">
       <div className="max-w-7xl mx-auto px-4 lg:px-12 flex flex-col items-center text-center">
@@ -52,6 +91,68 @@ const Footer = () => {
               </div>
             </div>
           </a>
+        </div>
+
+        <div className="w-full max-w-sm mb-12">
+          <h3 className="font-title-md text-[16px] font-bold text-on-surface mb-3 uppercase">¿Necesitas cancelar tu cita?</h3>
+          
+          {savedBookings.length > 0 && (
+            <div className="flex flex-col gap-3 mb-6">
+              {savedBookings.map((booking) => (
+                <div key={booking.token} className="bg-surface-container rounded-xl p-4 border border-outline-variant/30 flex flex-col gap-3">
+                  <div className="text-left text-sm text-on-surface-variant">
+                    <p className="font-bold text-on-surface mb-1">Cita Guardada</p>
+                    <p>El {booking.date} a las {booking.time}</p>
+                    <p className="text-xs mt-1">Servicio: {booking.serviceName}</p>
+                  </div>
+                  <button 
+                    onClick={() => handleCancelSaved(booking.token)}
+                    className="w-full py-2 rounded-lg bg-error/10 text-error font-bold uppercase tracking-wider hover:bg-error hover:text-on-error transition-colors text-xs flex items-center justify-center gap-1"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">delete</span>
+                    Cancelar esta cita
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <p className="text-sm text-on-surface-variant mb-2">O introduce tu código manualmente:</p>
+          <form className="flex gap-2" onSubmit={async (e) => {
+            e.preventDefault();
+            const token = e.target.token.value;
+            if(!token) return;
+            setCancelMessage(null);
+            try {
+              const res = await fetch('/api/cancelar-cita', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token })
+              });
+              if(res.ok) {
+                setCancelMessage({ type: 'success', text: '✅ Cita cancelada con éxito. Esperamos verte pronto.' });
+                e.target.reset();
+                // Limpiar de localStorage también por si acaso
+                const updatedBookings = savedBookings.filter(b => b.token !== token);
+                setSavedBookings(updatedBookings);
+                localStorage.setItem('tonin_bookings', JSON.stringify(updatedBookings));
+              } else {
+                setCancelMessage({ type: 'error', text: '❌ Error al cancelar. Revisa el token e inténtalo de nuevo.' });
+              }
+            } catch(error) { 
+              setCancelMessage({ type: 'error', text: '❌ Error de conexión al cancelar la cita.' });
+            }
+          }}>
+            <input name="token" type="text" placeholder="Introduce tu Token" required className="flex-1 bg-surface-container border border-outline-variant/30 rounded-xl px-4 py-2 text-on-surface focus:border-primary outline-none" />
+            <button type="submit" className="py-2 px-4 rounded-xl bg-error text-on-error font-bold uppercase tracking-wider hover:bg-error-container hover:text-on-error-container transition-colors text-sm">
+              Cancelar
+            </button>
+          </form>
+          {cancelMessage && (
+            <div className={`mt-4 p-3 rounded-xl text-sm font-medium ${cancelMessage.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+              {cancelMessage.text}
+            </div>
+          )}
         </div>
 
         <p className="font-body-sm text-xs text-on-surface-variant/60">© 2025 Tonín Barber. Todos los derechos reservados.</p>

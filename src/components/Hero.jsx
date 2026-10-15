@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
+import FormularioReserva from './FormularioReserva';
 
 const Hero = () => {
+  const [isReservaOpen, setIsReservaOpen] = useState(false);
   return (
     <section className="w-full max-w-7xl mx-auto px-4 lg:px-12 pt-8 lg:pt-16 pb-8 lg:pb-24 relative overflow-hidden">
       {/* Ambient Lighting */}
@@ -23,11 +25,22 @@ const Hero = () => {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto mb-8 lg:mb-10">
-            <a href="#servicios" className="w-full sm:w-auto py-3.5 lg:py-4 px-6 lg:px-8 rounded-xl bg-primary-container hover:bg-primary text-on-primary-fixed font-label-button text-[14px] font-bold tracking-wider uppercase transition-all shadow-[0_4px_24px_rgba(245,158,11,0.38)] flex items-center justify-center gap-2">
+            <button 
+              onClick={() => setIsReservaOpen(true)}
+              className="w-full sm:w-auto py-3.5 lg:py-4 px-6 lg:px-8 rounded-xl bg-primary-container hover:bg-primary text-on-primary-fixed font-label-button text-[14px] font-bold tracking-wider uppercase transition-all shadow-[0_4px_24px_rgba(245,158,11,0.38)] flex items-center justify-center gap-2"
+            >
               <span>¡Reserva tu cita!</span>
               <span className="hidden sm:inline material-symbols-outlined text-[18px]">arrow_forward</span>
-            </a>
+            </button>
           </div>
+
+          {isReservaOpen && (
+            <FormularioReserva 
+              service={null}
+              onClose={() => setIsReservaOpen(false)}
+              onSuccess={() => setIsReservaOpen(false)}
+            />
+          )}
 
           <div className="grid grid-cols-2 gap-4 w-full max-w-sm lg:max-w-md">
             <div className="flex items-center gap-2 lg:gap-3 py-2 lg:py-3 px-3 lg:px-4 bg-surface-container rounded-lg lg:rounded-xl shadow-sm border border-outline-variant/30">

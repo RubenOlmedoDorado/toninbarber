@@ -4,9 +4,13 @@
 
 @layer base {
   html, body {
-    width: 100vw;
+    width: 100%;
+    min-height: 100%;
     margin: 0;
     padding: 0;
+    background-color: #131313;
+    color: #e5e2e1;
+    font-family: 'Montserrat', sans-serif;
   }
   body {
     overscroll-behavior: none;

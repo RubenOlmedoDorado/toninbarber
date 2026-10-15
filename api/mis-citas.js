@@ -13,7 +13,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'El teléfono y el PIN son obligatorios' });
   }
 
-  const cleanPhone = phone.toString().trim();
+  const cleanPhone = phone.toString().replace(/\s+/g, '').trim();
   const cleanPin = pin.toString().trim();
 
   try {
@@ -56,10 +56,12 @@ export default async function handler(req, res) {
           singleEvents: true,
           orderBy: 'startTime'
         });
-        events = (fallback.data.items || []).filter(ev => 
-          (ev.extendedProperties?.private?.phone === cleanPhone) || 
-          (ev.description && ev.description.includes(cleanPhone))
-        );
+        const rawItems = fallback.data.items || [];
+        events = rawItems.filter(ev => {
+          const evPhone = (ev.extendedProperties?.private?.phone || '').replace(/\s+/g, '');
+          const evDesc = (ev.description || '').replace(/\s+/g, '');
+          return evPhone.includes(cleanPhone) || evDesc.includes(cleanPhone);
+        });
       } catch (fbErr) {
         console.warn('Fallback q:phone warning:', fbErr.message);
       }
@@ -68,14 +70,26 @@ export default async function handler(req, res) {
     // Filtrar citas que no estén canceladas
     const activeEvents = events.filter(ev => ev.status !== 'cancelled');
 
-    // Comprobar si el PIN de 4 dígitos coincide
+    // CASO 1: El teléfono no tiene ninguna cita registrada
+    if (activeEvents.length === 0) {
+      return res.status(404).json({ 
+        error: 'No tienes ninguna cita activa registrada con este número de teléfono.' 
+      });
+    }
+
+    // CASO 2: La cita existe para este teléfono, comprobar si el PIN coincide
     const matchingEvent = activeEvents.find(ev => {
-      const evPin = ev.extendedProperties?.private?.pin;
-      return evPin && evPin.toString().trim() === cleanPin;
+      const evPin = ev.extendedProperties?.private?.pin?.toString().trim();
+      const evToken = ev.extendedProperties?.private?.token?.toString().trim();
+      if (evPin && evPin === cleanPin) return true;
+      if (evToken && evToken.toUpperCase() === cleanPin.toUpperCase()) return true;
+      return false;
     });
 
     if (!matchingEvent) {
-      return res.status(404).json({ error: 'Cita no encontrada o PIN incorrecto' });
+      return res.status(401).json({ 
+        error: 'El PIN introducido es incorrecto. Por favor, comprueba tu código de 4 dígitos.' 
+      });
     }
 
     // Extraer datos formateados para el cliente

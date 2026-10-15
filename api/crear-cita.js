@@ -1,9 +1,15 @@
 import 'dotenv/config';
 import { google } from 'googleapis';
+import { 
+  MADRID_TIMEZONE, 
+  parseMadridDateTime, 
+  formatMadridRfc3339, 
+  formatMadridDate,
+  getMadridDayOfWeek 
+} from './_timezone.js';
 
 export default async function handler(req, res) {
   console.log('--- NUEVA PETICION ---');
-  process.env.TZ = 'Europe/Madrid';
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -42,20 +48,17 @@ export default async function handler(req, res) {
     const calendar = google.calendar({ version: 'v3', auth });
     const calendarId = process.env.GOOGLE_CALENDAR_ID;
 
-    // Calcular horas (Margen de limpieza de 10 min invisible para el cliente)
+    // Calcular horas con zona horaria Europe/Madrid (Margen de limpieza de 10 min invisible para el cliente)
     const BUFFER_CLEANING_MINUTES = 10;
     const duracionConMargen = Number(duracion) + BUFFER_CLEANING_MINUTES;
 
-    const startDateTimeStr = `${date}T${time}:00`;
-    const startDate = new Date(startDateTimeStr);
+    const { dateObj: startDate, rfc3339: startDateTimeIso } = parseMadridDateTime(date, time);
     const endDate = new Date(startDate.getTime() + duracionConMargen * 60000);
+    const endDateTimeIso = formatMadridRfc3339(endDate);
 
-    const startDateTimeIso = startDate.toISOString();
-    const endDateTimeIso = endDate.toISOString();
-
-    // 1. Buscar colisiones
-    const dayStart = new Date(`${date}T00:00:00`).toISOString();
-    const dayEnd = new Date(`${date}T23:59:59`).toISOString();
+    // 1. Buscar colisiones (captura todo el día natural en Europe/Madrid)
+    const dayStart = parseMadridDateTime(date, '00:00').dateObj.toISOString();
+    const dayEnd = parseMadridDateTime(date, '23:59:59').dateObj.toISOString();
 
     let response;
     try {
@@ -74,11 +77,10 @@ export default async function handler(req, res) {
 
     const events = response.data.items || [];
     
-    const dayOfWeek = startDate.getDay();
+    const dayOfWeek = getMadridDayOfWeek(date);
     if (dayOfWeek === 0) return res.status(400).json({ error: 'El local esta cerrado los domingos' });
     
-    const h = startDate.getHours();
-    const m = startDate.getMinutes();
+    const [h, m] = time.split(':').map(Number);
     const totalMins = h * 60 + m;
     
     // Validar horario comercial (Lunes a Sábado: 16:00 - 21:00)
@@ -164,10 +166,10 @@ export default async function handler(req, res) {
       // Validar si realmente pertenece a este telefono (en q:phone podria ser coincidencia parcial)
       const isOwner = (ev.extendedProperties?.private?.phone === phone) || (ev.description && ev.description.includes(phone));
       if (isOwner) {
-        // Ignorar la hora para que el cálculo sea por día natural
-        const date1 = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-        const date2 = new Date(evStart.getFullYear(), evStart.getMonth(), evStart.getDate());
-        const diffMs = Math.abs(date1.getTime() - date2.getTime());
+        // Ignorar la hora para que el cálculo sea por día natural en España
+        const d1 = new Date(formatMadridDate(startDate));
+        const d2 = new Date(formatMadridDate(evStart));
+        const diffMs = Math.abs(d1.getTime() - d2.getTime());
         const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
         
         if (diffDays <= 6) {
@@ -182,11 +184,11 @@ export default async function handler(req, res) {
       description: `Telefono: ${phone}`,
       start: {
         dateTime: startDateTimeIso,
-        timeZone: 'Europe/Madrid',
+        timeZone: MADRID_TIMEZONE,
       },
       end: {
         dateTime: endDateTimeIso,
-        timeZone: 'Europe/Madrid',
+        timeZone: MADRID_TIMEZONE,
       },
       extendedProperties: {
         private: {

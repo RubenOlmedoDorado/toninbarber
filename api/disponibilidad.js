@@ -1,9 +1,11 @@
 import 'dotenv/config';
 import { google } from 'googleapis';
+import { 
+  parseMadridDateTime, 
+  getMadridDayOfWeek 
+} from './_timezone.js';
 
 export default async function handler(req, res) {
-  process.env.TZ = 'Europe/Madrid';
-
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -34,9 +36,9 @@ export default async function handler(req, res) {
     const calendar = google.calendar({ version: 'v3', auth });
     const calendarId = process.env.GOOGLE_CALENDAR_ID;
 
-    // 1. Obtener eventos de todo el día solicitado
-    const dayStart = new Date(`${date}T00:00:00`).toISOString();
-    const dayEnd = new Date(`${date}T23:59:59`).toISOString();
+    // 1. Obtener eventos de todo el día solicitado en horario de Madrid
+    const dayStart = parseMadridDateTime(date, '00:00').dateObj.toISOString();
+    const dayEnd = parseMadridDateTime(date, '23:59:59').dateObj.toISOString();
 
     const calendarResponse = await calendar.events.list({
       calendarId,
@@ -59,9 +61,7 @@ export default async function handler(req, res) {
     }
 
     // 3. Determinar franja de horario comercial
-    const [year, month, dayNum] = date.split('-').map(Number);
-    const targetDate = new Date(year, month - 1, dayNum);
-    const dayOfWeek = targetDate.getDay(); // 0 Domingo, 1 Lunes... 6 Sábado
+    const dayOfWeek = getMadridDayOfWeek(date); // 0 Domingo, 1 Lunes... 6 Sábado
 
     // Domingos cerrado
     if (dayOfWeek === 0) {
@@ -81,7 +81,7 @@ export default async function handler(req, res) {
     const now = new Date();
     const disponibles = [];
 
-    // 4. Generar bloques cada 15 min y filtrar colisiones
+    // 4. Generar bloques cada 15 min y filtrar colisiones en horario exacto de Madrid
     for (let range of ranges) {
       let currentMinutes = range.startH * 60 + range.startM;
       const closingMinutes = range.endH * 60 + range.endM;
@@ -91,10 +91,10 @@ export default async function handler(req, res) {
         const slotM = currentMinutes % 60;
         const timeStr = `${slotH.toString().padStart(2, '0')}:${slotM.toString().padStart(2, '0')}`;
 
-        const slotStart = new Date(`${date}T${timeStr}:00`);
+        const { dateObj: slotStart } = parseMadridDateTime(date, timeStr);
         const slotEnd = new Date(slotStart.getTime() + totalSlotMinutes * 60000);
 
-        // Si la fecha es hoy, descartar horas que ya hayan pasado
+        // Si la fecha es hoy, descartar horas que ya hayan pasado respecto a la hora actual
         if (slotStart <= now) {
           currentMinutes += 15;
           continue;
@@ -126,3 +126,4 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: error.message });
   }
 }
+

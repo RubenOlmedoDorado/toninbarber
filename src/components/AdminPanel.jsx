@@ -6,6 +6,7 @@ function AdminPanel({ onNavigateHome }) {
   const [adminToken, setAdminToken] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [validandoAuth, setValidandoAuth] = useState(false);
 
   // Estados de datos de citas
   const [citasAdmin, setCitasAdmin] = useState([]);
@@ -17,55 +18,95 @@ function AdminPanel({ onNavigateHome }) {
 
   // Función para obtener las citas reales desde Google Calendar
   const fetchCitas = async (passToUse) => {
-    const token = passToUse || adminToken || sessionStorage.getItem('tonin_admin_pass') || '1234admin';
+    const token = passToUse || adminToken || sessionStorage.getItem('tonin_admin_pass');
+    if (!token) return false;
     setCargandoCitas(true);
     setErrorCitas('');
     try {
       const res = await fetch(`/api/admin-citas?password=${encodeURIComponent(token)}`, {
         headers: {
+          'Authorization': `Bearer ${token}`,
           'x-admin-password': token
         }
       });
       const data = await res.json();
+      if (res.status === 401) {
+        handleLogout();
+        setErrorMsg('Contraseña incorrecta');
+        return false;
+      }
       if (!res.ok) {
         throw new Error(data.error || 'Error al conectar con la agenda');
       }
       setCitasAdmin(data.citas || []);
+      return true;
     } catch (err) {
       console.error('Error al cargar citas de Google Calendar:', err);
       setErrorCitas(err.message || 'Error al conectar con Google Calendar');
+      return false;
     } finally {
       setCargandoCitas(false);
     }
   };
 
-  // Comprobar si ya estaba autenticado en la sesión actual
+  // Comprobar si ya estaba autenticado en la sesión actual validando con el backend
   useEffect(() => {
     const isAuth = sessionStorage.getItem('tonin_admin_authenticated') === 'true';
-    if (isAuth) {
-      const savedPass = sessionStorage.getItem('tonin_admin_pass') || '1234admin';
-      setIsAuthenticated(true);
+    const savedPass = sessionStorage.getItem('tonin_admin_pass');
+    if (isAuth && savedPass) {
       setAdminToken(savedPass);
-      fetchCitas(savedPass);
+      fetchCitas(savedPass).then((success) => {
+        if (success) {
+          setIsAuthenticated(true);
+        } else {
+          sessionStorage.removeItem('tonin_admin_authenticated');
+          sessionStorage.removeItem('tonin_admin_pass');
+          setIsAuthenticated(false);
+        }
+      });
     }
   }, []);
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    const adminPass = (import.meta.env.VITE_ADMIN_PASS || '1234admin')
-      .replace(/["'\\]/g, '')
-      .trim();
     const cleanInput = password.trim();
 
-    if (cleanInput === adminPass || cleanInput === '1234admin') {
+    if (!cleanInput) {
+      setErrorMsg('Por favor, introduce la contraseña.');
+      return;
+    }
+
+    setValidandoAuth(true);
+    setErrorMsg('');
+
+    try {
+      const res = await fetch(`/api/admin-citas?password=${encodeURIComponent(cleanInput)}`, {
+        headers: {
+          'Authorization': `Bearer ${cleanInput}`,
+          'x-admin-password': cleanInput
+        }
+      });
+      const data = await res.json();
+
+      if (res.status === 401) {
+        setErrorMsg('Contraseña incorrecta');
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Error al conectar con el servidor.');
+      }
+
+      // Status 200: Autenticación exitosa validada por el backend
       setIsAuthenticated(true);
-      setErrorMsg('');
       setAdminToken(cleanInput);
       sessionStorage.setItem('tonin_admin_authenticated', 'true');
       sessionStorage.setItem('tonin_admin_pass', cleanInput);
-      fetchCitas(cleanInput);
-    } else {
-      setErrorMsg('Contraseña incorrecta. Acceso denegado.');
+      setCitasAdmin(data.citas || []);
+    } catch (err) {
+      setErrorMsg(err.message || 'Error al validar las credenciales.');
+    } finally {
+      setValidandoAuth(false);
     }
   };
 
@@ -139,8 +180,8 @@ function AdminPanel({ onNavigateHome }) {
     });
   }, [citasAdmin, busqueda]);
 
-  // Contadores estadísticos
-  const hoyStr = new Date().toISOString().split('T')[0];
+  // Contadores estadísticos en la zona horaria oficial de la barbería (Europe/Madrid)
+  const hoyStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date());
   const citasHoyCount = useMemo(() => {
     return citasAdmin.filter(c => c.fecha === hoyStr && !c.isBloqueo).length;
   }, [citasAdmin, hoyStr]);
@@ -206,10 +247,20 @@ function AdminPanel({ onNavigateHome }) {
 
             <button
               type="submit"
-              className="w-full py-3 rounded-xl bg-primary-container text-on-primary-fixed font-bold text-xs uppercase tracking-wider hover:opacity-95 active:scale-[0.98] transition-all shadow-[0_2px_12px_rgba(245,158,11,0.25)] flex items-center justify-center gap-2 cursor-pointer font-label-tag mt-2"
+              disabled={validandoAuth}
+              className="w-full py-3 rounded-xl bg-primary-container text-on-primary-fixed font-bold text-xs uppercase tracking-wider hover:opacity-95 active:scale-[0.98] transition-all shadow-[0_2px_12px_rgba(245,158,11,0.25)] flex items-center justify-center gap-2 cursor-pointer font-label-tag mt-2 disabled:opacity-60"
             >
-              <span className="material-symbols-outlined text-[18px]">lock_open</span>
-              <span>Acceder al Panel</span>
+              {validandoAuth ? (
+                <>
+                  <span className="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>
+                  <span>Verificando...</span>
+                </>
+              ) : (
+                <>
+                  <span className="material-symbols-outlined text-[18px]">lock_open</span>
+                  <span>Acceder al Panel</span>
+                </>
+              )}
             </button>
           </form>
 

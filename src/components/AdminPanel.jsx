@@ -180,8 +180,8 @@ function AdminPanel({ onNavigateHome }) {
     });
   }, [citasAdmin, busqueda]);
 
-  // Contadores estadísticos
-  const hoyStr = new Date().toISOString().split('T')[0];
+  // Contadores estadísticos en la zona horaria oficial de la barbería (Europe/Madrid)
+  const hoyStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date());
   const citasHoyCount = useMemo(() => {
     return citasAdmin.filter(c => c.fecha === hoyStr && !c.isBloqueo).length;
   }, [citasAdmin, hoyStr]);

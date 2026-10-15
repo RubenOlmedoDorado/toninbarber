@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { google } from 'googleapis';
+import { MADRID_TIMEZONE, formatMadridTime } from './_timezone.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') {
@@ -92,17 +93,15 @@ export default async function handler(req, res) {
       });
     }
 
-    // Extraer datos formateados para el cliente
+    // Extraer datos formateados para el cliente con la zona horaria correcta de España (Europe/Madrid)
     const evStart = new Date(matchingEvent.start.dateTime || matchingEvent.start.date);
     const dateFormatted = evStart.toLocaleDateString('es-ES', { 
       year: 'numeric', 
       month: '2-digit', 
-      day: '2-digit' 
+      day: '2-digit',
+      timeZone: MADRID_TIMEZONE
     });
-    const timeFormatted = evStart.toLocaleTimeString('es-ES', { 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    });
+    const timeFormatted = matchingEvent.start.dateTime ? formatMadridTime(evStart) : 'Todo el día';
 
     const serviceName = matchingEvent.summary 
       ? matchingEvent.summary.replace(/^Cita:\s*[^–-]+[-–]\s*/i, '').replace(/^Cita:\s*/i, '').trim()

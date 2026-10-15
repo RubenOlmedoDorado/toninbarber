@@ -1,5 +1,11 @@
 import 'dotenv/config';
 import { google } from 'googleapis';
+import { 
+  MADRID_TIMEZONE, 
+  parseMadridDateTime, 
+  formatMadridDate, 
+  formatMadridTime 
+} from './_timezone.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -35,10 +41,10 @@ export default async function handler(req, res) {
     const calendar = google.calendar({ version: 'v3', auth });
     const calendarId = process.env.GOOGLE_CALENDAR_ID;
 
-    // Rango de fechas: Desde el inicio de hoy hasta dentro de 60 días
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-    const endWindow = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000);
+    // Rango de fechas: Desde el inicio de hoy en Europe/Madrid hasta dentro de 60 días
+    const todayMadrid = formatMadridDate(new Date());
+    const startOfToday = parseMadridDateTime(todayMadrid, '00:00').dateObj;
+    const endWindow = new Date(startOfToday.getTime() + 60 * 24 * 60 * 60 * 1000);
 
     const response = await calendar.events.list({
       calendarId,
@@ -59,18 +65,10 @@ export default async function handler(req, res) {
         const startDate = startRaw ? new Date(startRaw) : null;
         const endDate = endRaw ? new Date(endRaw) : null;
 
-        // Formato de fecha YYYY-MM-DD
-        const fecha = startDate ? startDate.toISOString().split('T')[0] : '';
-        const horaInicio = startDate && ev.start?.dateTime ? startDate.toLocaleTimeString('es-ES', {
-          hour: '2-digit',
-          minute: '2-digit',
-          timeZone: 'Europe/Madrid'
-        }) : 'Todo el día';
-        const horaFin = endDate && ev.end?.dateTime ? endDate.toLocaleTimeString('es-ES', {
-          hour: '2-digit',
-          minute: '2-digit',
-          timeZone: 'Europe/Madrid'
-        }) : '';
+        // Formato de fecha YYYY-MM-DD y horas en horario Europe/Madrid
+        const fecha = startDate ? formatMadridDate(startDate) : (startRaw?.includes('T') ? '' : startRaw || '');
+        const horaInicio = startDate && ev.start?.dateTime ? formatMadridTime(startDate) : 'Todo el día';
+        const horaFin = endDate && ev.end?.dateTime ? formatMadridTime(endDate) : '';
 
         // Extraer información del resumen y descripción
         const summary = ev.summary || '';

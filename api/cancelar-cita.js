@@ -10,7 +10,11 @@ export default async function handler(req, res) {
   const queryEventId = req.query?.eventId || req.query?.token;
   const targetId = eventId || token || queryEventId;
 
-  if (!targetId && (!phone || !pin)) {
+  const cleanPhone = (phone || req.query?.phone || '').toString().trim();
+  const cleanPin = (pin || req.query?.pin || '').toString().trim();
+
+  // Validar que al menos tengamos un ID o teléfono/PIN
+  if (!targetId && (!cleanPhone || !cleanPin)) {
     return res.status(400).json({ error: 'Se requiere el ID de la cita o el teléfono y PIN' });
   }
 
@@ -57,16 +61,27 @@ export default async function handler(req, res) {
     }
 
     // 2. Si no se localizó por ID y se enviaron phone y pin
-    if (!targetEventId && phone && pin) {
-      const cleanPhone = phone.toString().trim();
-      const cleanPin = pin.toString().trim();
+    if (!targetEventId && cleanPhone && cleanPin) {
       try {
         const listRes = await calendar.events.list({
           calendarId,
           privateExtendedProperty: `phone=${cleanPhone}`,
           singleEvents: true
         });
-        const match = (listRes.data.items || []).find(ev => 
+        let items = listRes.data.items || [];
+        if (items.length === 0) {
+          const fallback = await calendar.events.list({
+            calendarId,
+            q: cleanPhone,
+            singleEvents: true
+          });
+          items = (fallback.data.items || []).filter(ev => 
+            (ev.extendedProperties?.private?.phone === cleanPhone) || 
+            (ev.description && ev.description.includes(cleanPhone))
+          );
+        }
+
+        const match = items.find(ev => 
           ev.extendedProperties?.private?.pin === cleanPin && ev.status !== 'cancelled'
         );
         if (match) {

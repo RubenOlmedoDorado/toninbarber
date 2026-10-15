@@ -1,14 +1,31 @@
 import React, { useState, useEffect } from 'react';
 
 const MisCitas = ({ onClose }) => {
-  // Comprobar si hay una cita activa guardada en localStorage
+  // Comprobar y normalizar si hay una cita activa guardada en localStorage
   const getStoredBooking = () => {
     try {
       const single = JSON.parse(localStorage.getItem('tonin_cita') || 'null');
-      if (single && single.date && single.time) return single;
+      if (single && single.date && single.time) {
+        return {
+          ...single,
+          eventId: single.eventId || single.token || single.id,
+          token: single.token || single.eventId || single.id,
+          phone: single.phone || localStorage.getItem('tonin_cliente_telefono') || '',
+          pin: single.pin || localStorage.getItem('tonin_pin') || ''
+        };
+      }
 
       const list = JSON.parse(localStorage.getItem('tonin_bookings') || '[]');
-      if (Array.isArray(list) && list.length > 0) return list[0];
+      if (Array.isArray(list) && list.length > 0) {
+        const b = list[0];
+        return {
+          ...b,
+          eventId: b.eventId || b.token || b.id,
+          token: b.token || b.eventId || b.id,
+          phone: b.phone || localStorage.getItem('tonin_cliente_telefono') || '',
+          pin: b.pin || localStorage.getItem('tonin_pin') || ''
+        };
+      }
     } catch (e) {
       console.warn('Error leyendo cita de localStorage:', e);
     }
@@ -16,6 +33,16 @@ const MisCitas = ({ onClose }) => {
   };
 
   const [activeBooking, setActiveBooking] = useState(getStoredBooking);
+
+  // Estados para cancelar cita activa (permitiendo ingresar el PIN si falta o se solicita)
+  const [cancelPin, setCancelPin] = useState(() => {
+    const b = getStoredBooking();
+    return b?.pin || localStorage.getItem('tonin_pin') || '';
+  });
+  const [cancelPhone, setCancelPhone] = useState(() => {
+    const b = getStoredBooking();
+    return b?.phone || localStorage.getItem('tonin_cliente_telefono') || '';
+  });
 
   // Estados para el formulario de recuperación (cuando no hay cita en el navegador)
   const [phone, setPhone] = useState(() => localStorage.getItem('tonin_cliente_telefono') || '');
@@ -29,11 +56,25 @@ const MisCitas = ({ onClose }) => {
   useEffect(() => {
     const stored = getStoredBooking();
     setActiveBooking(stored);
+    if (stored) {
+      if (stored.pin && !cancelPin) setCancelPin(stored.pin);
+      if (stored.phone && !cancelPhone) setCancelPhone(stored.phone);
+    }
   }, []);
 
-  // Cancelar la cita activa
+  // Cancelar la cita activa enviando todos los identificadores disponibles
   const handleCancel = async () => {
     if (!activeBooking) return;
+
+    const targetId = activeBooking.eventId || activeBooking.token || activeBooking.id;
+    const finalPhone = cancelPhone || activeBooking.phone || phone || localStorage.getItem('tonin_cliente_telefono') || '';
+    const finalPin = cancelPin || activeBooking.pin || pin || localStorage.getItem('tonin_pin') || '';
+
+    // Si no tenemos ID y faltan teléfono o PIN, pedirlo
+    if (!targetId && (!finalPhone || !finalPin)) {
+      setError('Por favor, introduce tu PIN de 4 dígitos para poder cancelar la cita.');
+      return;
+    }
 
     const confirmed = window.confirm('¿Estás seguro de que quieres anular tu cita? Esta acción no se puede deshacer.');
     if (!confirmed) return;
@@ -47,9 +88,10 @@ const MisCitas = ({ onClose }) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          eventId: activeBooking.eventId,
-          phone: activeBooking.phone || phone,
-          pin: activeBooking.pin || pin
+          eventId: targetId,
+          token: targetId,
+          phone: finalPhone,
+          pin: finalPin
         })
       });
 
@@ -69,6 +111,18 @@ const MisCitas = ({ onClose }) => {
       setError(err.message || 'No se pudo cancelar la cita. Inténtalo de nuevo.');
     } finally {
       setCancelling(false);
+    }
+  };
+
+  // Opción para forzar limpieza local en caso de citas huérfanas o de prueba antiguas
+  const handleForceClearLocal = () => {
+    if (window.confirm('¿Deseas quitar esta cita de tu dispositivo?')) {
+      localStorage.removeItem('tonin_cita_activa');
+      localStorage.removeItem('tonin_cita');
+      localStorage.setItem('tonin_bookings', '[]');
+      setActiveBooking(null);
+      setError('');
+      setSuccessMsg('Cita quitada de este dispositivo.');
     }
   };
 
@@ -110,6 +164,7 @@ const MisCitas = ({ onClose }) => {
 
       const newActive = {
         eventId: foundCita.eventId || foundCita.id,
+        token: foundCita.eventId || foundCita.id,
         serviceName: foundCita.serviceName || (foundCita.summary ? foundCita.summary.replace(/^Cita:\s*[^–-]+[-–]\s*/i, '').replace(/^Cita:\s*/i, '').trim() : 'Servicio Barbería'),
         date: foundCita.date,
         time: foundCita.time,
@@ -124,6 +179,8 @@ const MisCitas = ({ onClose }) => {
       localStorage.setItem('tonin_cliente_telefono', phone);
       localStorage.setItem('tonin_pin', pin);
 
+      setCancelPin(pin);
+      setCancelPhone(phone);
       setActiveBooking(newActive);
       setSuccessMsg('¡Cita encontrada y guardada en este dispositivo!');
     } catch (err) {
@@ -171,7 +228,7 @@ const MisCitas = ({ onClose }) => {
           </div>
         )}
 
-        {/* CASO 1: HAY UNA CITA GUARDADA EN EL NAVEGADOR -> OCULTA CUALQUIER FORMULARIO */}
+        {/* CASO 1: HAY UNA CITA GUARDADA EN EL NAVEGADOR -> MUESTRA DATOS Y OPCIÓN DE PIN/CANCELACIÓN */}
         {activeBooking ? (
           <div className="animate-in fade-in duration-200">
             <div className="flex items-center justify-between mb-3">
@@ -208,14 +265,40 @@ const MisCitas = ({ onClose }) => {
                 </div>
               </div>
 
-              {activeBooking.pin && (
-                <div className="flex items-center justify-between text-xs text-on-surface-variant mb-4 bg-surface-container-high/60 px-3.5 py-2 rounded-xl border border-outline-variant/20">
-                  <span className="text-[11px] font-medium">PIN de gestión:</span>
-                  <span className="font-mono font-bold text-primary tracking-widest text-sm bg-surface-container px-2 py-0.5 rounded border border-outline-variant/30">
-                    {activeBooking.pin}
-                  </span>
+              {/* Opción para introducir o verificar el PIN / Código de cancelación */}
+              <div className="mb-4 bg-surface-container-low/80 p-3.5 rounded-xl border border-outline-variant/30 text-left">
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant font-label-tag flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-sm text-primary">pin</span>
+                    <span>PIN de Cancelación</span>
+                  </label>
+                  {cancelPin ? (
+                    <span className="text-[10px] font-bold text-green-400 bg-green-500/10 px-2 py-0.5 rounded">
+                      PIN Guardado
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">
+                      Introduce tu PIN
+                    </span>
+                  )}
                 </div>
-              )}
+                
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={6}
+                  placeholder="Introduce tu PIN (ej: 1234)"
+                  className="w-full bg-surface-container border border-outline-variant/40 rounded-xl px-3.5 py-2.5 text-on-surface focus:border-primary focus:bg-surface-container-high outline-none transition-all text-sm tracking-widest text-center font-mono font-bold"
+                  value={cancelPin}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, '').slice(0, 6);
+                    setCancelPin(val);
+                  }}
+                />
+                <p className="text-[11px] text-on-surface-variant/70 mt-1.5 text-center">
+                  Introduce el PIN de 4 dígitos creado al reservar para autorizar la cancelación.
+                </p>
+              </div>
 
               {/* Botón rojo Cancelar Cita */}
               <button
@@ -231,6 +314,17 @@ const MisCitas = ({ onClose }) => {
                   {cancelling ? 'Cancelando...' : 'Cancelar Cita'}
                 </span>
               </button>
+
+              {/* Opción de auxilio para desvincular si fue una cita antigua o huérfana */}
+              <div className="mt-3.5 text-center">
+                <button
+                  type="button"
+                  onClick={handleForceClearLocal}
+                  className="text-[11px] text-on-surface-variant/60 hover:text-red-400 transition-colors underline cursor-pointer"
+                >
+                  ¿Problemas al anular? Quitar cita de este dispositivo
+                </button>
+              </div>
             </div>
           </div>
         ) : (

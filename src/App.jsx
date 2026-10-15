@@ -5,13 +5,24 @@ import Galeria from './components/Galeria';
 import Informacion from './components/Informacion';
 import FormularioReserva from './components/FormularioReserva';
 import MisCitas from './components/MisCitas';
+import AdminPanel from './components/AdminPanel';
+import InstallAppPrompt from './components/InstallAppPrompt';
 
 function App() {
+  const [currentPath, setCurrentPath] = useState(window.location.pathname);
   const [activeTab, setActiveTab] = useState('servicios');
   const [isReservaOpen, setIsReservaOpen] = useState(false);
   const [selectedService, setSelectedService] = useState(null);
   const [isMisCitasOpen, setIsMisCitasOpen] = useState(false);
   const [hasSavedBooking, setHasSavedBooking] = useState(false);
+
+  useEffect(() => {
+    const handleLocationChange = () => {
+      setCurrentPath(window.location.pathname);
+    };
+    window.addEventListener('popstate', handleLocationChange);
+    return () => window.removeEventListener('popstate', handleLocationChange);
+  }, []);
 
   useEffect(() => {
     try {
@@ -35,6 +46,20 @@ function App() {
     { id: 'imagenes', label: 'Imágenes', icon: 'photo_camera' },
     { id: 'informacion', label: 'Información', icon: 'info' },
   ];
+
+  const isAdminRoute = currentPath === '/panel-tonin' || 
+    (typeof window !== 'undefined' && (window.location.hash === '#/panel-tonin' || window.location.hash === '#panel-tonin'));
+
+  if (isAdminRoute) {
+    return (
+      <AdminPanel
+        onNavigateHome={() => {
+          window.history.pushState({}, '', '/');
+          setCurrentPath('/');
+        }}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-surface text-on-surface font-body-md antialiased selection:bg-primary selection:text-on-primary-fixed flex flex-col relative overflow-x-hidden">
@@ -148,6 +173,9 @@ function App() {
       {isMisCitasOpen && (
         <MisCitas onClose={() => setIsMisCitasOpen(false)} />
       )}
+
+      {/* Prompt inteligente de instalación de la PWA (iOS, Android, Desktop) */}
+      <InstallAppPrompt variant="floating" />
     </div>
   );
 }

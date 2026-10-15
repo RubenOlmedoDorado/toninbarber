@@ -1,4 +1,5 @@
 import React from 'react';
+import InstallAppPrompt from './InstallAppPrompt';
 
 const Informacion = () => {
   const diasHorario = [
@@ -7,7 +8,7 @@ const Informacion = () => {
     { dia: 'Miércoles', horas: '16:00 - 21:00', abierto: true },
     { dia: 'Jueves', horas: '16:00 - 21:00', abierto: true },
     { dia: 'Viernes', horas: '16:00 - 21:00', abierto: true },
-    { dia: 'Sábados', horas: 'Bajo Cita Previa (Consultar)', abierto: true },
+    { dia: 'Sábados', horas: '10:00 - 14:00', abierto: true },
     { dia: 'Domingos', horas: 'Cerrado', abierto: false },
   ];
 
@@ -110,6 +111,9 @@ const Informacion = () => {
         </div>
 
       </div>
+      
+      {/* Bloque PWA para Escritorio y Móvil */}
+      <InstallAppPrompt variant="inline" />
 
       <p className="text-center text-xs text-on-surface-variant/60 font-label-tag uppercase tracking-widest py-3">
         © {new Date().getFullYear()} TOÑÍN BARBER · PASIÓN POR EL OFICIO

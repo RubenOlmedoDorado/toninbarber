@@ -81,16 +81,20 @@ export default async function handler(req, res) {
     const m = startDate.getMinutes();
     const totalMins = h * 60 + m;
     
-    // Validar horario comercial (Solo tardes: 16:00 - 21:00)
+    // Validar horario comercial (Lunes a Viernes: 16:00 - 21:00 | Sábados: 10:00 - 14:00)
     let isBusinessHours = false;
     if (dayOfWeek >= 1 && dayOfWeek <= 5) {
       if (totalMins >= 16 * 60 && totalMins < 21 * 60) {
         isBusinessHours = true;
       }
+    } else if (dayOfWeek === 6) {
+      if (totalMins >= 10 * 60 && totalMins < 14 * 60) {
+        isBusinessHours = true;
+      }
     }
     
     if (!isBusinessHours) {
-      return res.status(400).json({ error: 'Fuera de horario. Disponible de Lunes a Viernes de 16:00 a 21:00 (Turno Tarde)' });
+      return res.status(400).json({ error: 'Fuera de horario. Disponible de Lunes a Viernes de 16:00 a 21:00 y Sábados de 10:00 a 14:00' });
     }
 
     let hasOverlap = false;

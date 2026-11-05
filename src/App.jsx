@@ -4,7 +4,7 @@ import Resenas from './components/Resenas';
 import Galeria from './components/Galeria';
 import Informacion from './components/Informacion';
 import FormularioReserva from './components/FormularioReserva';
-import MisCitas from './components/MisCitas';
+import MisCitas, { isBookingExpiredOrConcluded, clearActiveBookingLocal } from './components/MisCitas';
 import AdminPanel from './components/AdminPanel';
 import InstallAppPrompt from './components/InstallAppPrompt';
 
@@ -29,7 +29,14 @@ function App() {
       const isActiva = localStorage.getItem('tonin_cita_activa') === 'true';
       const saved = JSON.parse(localStorage.getItem('tonin_bookings') || '[]');
       const single = JSON.parse(localStorage.getItem('tonin_cita') || 'null');
-      setHasSavedBooking(isActiva || (Array.isArray(saved) && saved.length > 0) || !!single);
+      const target = single || (Array.isArray(saved) && saved[0]) || null;
+
+      if (target && isBookingExpiredOrConcluded(target)) {
+        clearActiveBookingLocal();
+        setHasSavedBooking(false);
+      } else {
+        setHasSavedBooking(isActiva || (Array.isArray(saved) && saved.length > 0) || !!single);
+      }
     } catch (e) {
       setHasSavedBooking(false);
     }

@@ -114,7 +114,8 @@ export default async function handler(req, res) {
       date: dateFormatted,
       time: timeFormatted,
       phone: cleanPhone,
-      pin: cleanPin
+      pin: cleanPin,
+      status: matchingEvent.extendedProperties?.private?.status || 'pending'
     };
 
     return res.status(200).json({ 

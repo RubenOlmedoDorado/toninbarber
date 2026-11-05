@@ -403,7 +403,7 @@ const FormularioReserva = ({ service, onClose }) => {
                 ) : cargandoHoras ? (
                   <option value="" disabled>Cargando horas disponibles...</option>
                 ) : horasDisponibles.length === 0 ? (
-                  <option value="" disabled>No hay horas disponibles este día</option>
+                  <option value="" disabled>El peluquero no puede este día</option>
                 ) : (
                   <>
                     <option value="" disabled>--:--</option>

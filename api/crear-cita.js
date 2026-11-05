@@ -78,7 +78,7 @@ export default async function handler(req, res) {
     const events = response.data.items || [];
     
     const dayOfWeek = getMadridDayOfWeek(date);
-    if (dayOfWeek === 0) return res.status(400).json({ error: 'El local esta cerrado los domingos' });
+    if (dayOfWeek === 0) return res.status(400).json({ error: 'El peluquero no puede los domingos (cerrado por descanso)' });
     
     const [h, m] = time.split(':').map(Number);
     const totalMins = h * 60 + m;
@@ -92,7 +92,7 @@ export default async function handler(req, res) {
     }
     
     if (!isBusinessHours) {
-      return res.status(400).json({ error: 'Fuera de horario. Disponible de Lunes a Sábado de 16:00 a 21:00' });
+      return res.status(400).json({ error: 'El peluquero no puede a esa hora. Horario disponible de Lunes a Sábado de 16:00 a 21:00' });
     }
 
     let hasOverlap = false;
@@ -100,21 +100,24 @@ export default async function handler(req, res) {
       // Comprobar bloqueo por día libre o festivo
       if (ev.summary) {
         const summaryLower = ev.summary.toLowerCase();
-        if (summaryLower.includes('cerrado') || summaryLower.includes('libre')) {
+        if (summaryLower.includes('cerrado') || summaryLower.includes('libre') || summaryLower.includes('bloqueado')) {
           return res.status(400).json({ 
-            error: 'La barbería está cerrada este día por festivo o descanso. Por favor, elige otra fecha.' 
+            error: 'El peluquero no puede ese día. Por favor, elige otra fecha.' 
           });
         }
       }
 
       const evStart = new Date(ev.start.dateTime || ev.start.date);
       const evEnd = new Date(ev.end.dateTime || ev.end.date);
+      const evStatus = ev.extendedProperties?.private?.status;
+      const isConcluded = evStatus === 'attended' || evStatus === 'no_show' || evEnd <= new Date();
       
       if (
-        (ev.description && ev.description.includes(phone)) || 
-        (ev.extendedProperties?.private?.phone === phone)
+        !isConcluded &&
+        ((ev.description && ev.description.includes(phone)) || 
+        (ev.extendedProperties?.private?.phone === phone))
       ) {
-        return res.status(400).json({ error: 'Ya tienes una cita reservada para este dia' });
+        return res.status(400).json({ error: 'Ya tienes una cita activa reservada para este día' });
       }
 
       if (startDate < evEnd && endDate > evStart) {
@@ -123,11 +126,11 @@ export default async function handler(req, res) {
     }
 
     if (hasOverlap) {
-      return res.status(400).json({ error: 'Ese hueco ya esta ocupado, por favor prueba a elegir otra hora.' });
+      return res.status(400).json({ error: 'El peluquero no puede a esa hora o ese día, por favor prueba a elegir otro horario.' });
     }
 
     
-    // Anti-spam por telefono: citas distanciadas al menos 6 dias
+    // Anti-spam por telefono: citas distanciadas al menos 6 dias (solo aplica a citas futuras activas)
     const sixDaysMs = 7 * 24 * 60 * 60 * 1000;
     const checkMin = new Date(startDate.getTime() - sixDaysMs).toISOString();
     const checkMax = new Date(startDate.getTime() + sixDaysMs).toISOString();
@@ -162,6 +165,14 @@ export default async function handler(req, res) {
     }
 
     for (let ev of spamEvents) {
+      if (ev.status === 'cancelled') continue;
+      const evStatus = ev.extendedProperties?.private?.status;
+      const evEnd = new Date(ev.end.dateTime || ev.end.date);
+      // Si la cita ya concluyó (asistió, falló o ya pasó la hora), no bloquea para agendar una nueva cita
+      if (evStatus === 'attended' || evStatus === 'no_show' || evEnd <= new Date()) {
+        continue;
+      }
+
       const evStart = new Date(ev.start.dateTime || ev.start.date);
       // Validar si realmente pertenece a este telefono (en q:phone podria ser coincidencia parcial)
       const isOwner = (ev.extendedProperties?.private?.phone === phone) || (ev.description && ev.description.includes(phone));

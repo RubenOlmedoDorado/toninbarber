@@ -48,13 +48,21 @@ export default async function handler(req, res) {
       orderBy: 'startTime'
     });
 
-    const events = calendarResponse.data.items || [];
+    const items = calendarResponse.data.items || [];
+    const events = items.filter(ev => ev.status !== 'cancelled');
 
-    // 2. Si hay algún evento que marque día cerrado o libre, retornar array vacío
+    // 2. Si hay algún evento que marque día cerrado, libre o bloqueo completo de agenda, retornar array vacío
     for (let ev of events) {
       if (ev.summary) {
         const summaryLower = ev.summary.toLowerCase();
-        if (summaryLower.includes('cerrado') || summaryLower.includes('libre')) {
+        const privateProps = ev.extendedProperties?.private || {};
+        const isFullDayBlock = privateProps.isFullDay === 'true' || (!ev.start?.dateTime && ev.start?.date);
+
+        if (
+          summaryLower.includes('cerrado') || 
+          summaryLower.includes('libre') ||
+          (summaryLower.includes('bloqueado') && isFullDayBlock)
+        ) {
           return res.status(200).json({ disponibles: [] });
         }
       }

@@ -1,31 +1,94 @@
 import React, { useState, useEffect } from 'react';
 
+/**
+ * Comprueba si una cita ya ha concluido:
+ * - Si fue marcada como 'attended' o 'no_show'
+ * - O si su fecha y hora ya pasaron respecto a la hora actual (más margen de 45 min de corte)
+ */
+export const isBookingExpiredOrConcluded = (booking) => {
+  if (!booking) return false;
+  if (booking.status === 'attended' || booking.status === 'no_show') {
+    return true;
+  }
+  if (!booking.date) return false;
+
+  try {
+    let year, month, day;
+    if (booking.date.includes('-')) {
+      const parts = booking.date.split('-');
+      year = parseInt(parts[0], 10);
+      month = parseInt(parts[1], 10) - 1;
+      day = parseInt(parts[2], 10);
+    } else if (booking.date.includes('/')) {
+      const parts = booking.date.split('/');
+      day = parseInt(parts[0], 10);
+      month = parseInt(parts[1], 10) - 1;
+      year = parseInt(parts[2], 10);
+    } else {
+      return false;
+    }
+
+    let hours = 23, minutes = 59;
+    if (booking.time && booking.time.includes(':')) {
+      const [h, m] = booking.time.split(':');
+      hours = parseInt(h, 10);
+      minutes = parseInt(m, 10);
+    }
+
+    const bookingDate = new Date(year, month, day, hours, minutes);
+    // Margen de 45 minutos: si la hora de finalización ya pasó, se considera concluida
+    const bookingEnd = new Date(bookingDate.getTime() + 45 * 60 * 1000);
+    return new Date() > bookingEnd;
+  } catch (e) {
+    return false;
+  }
+};
+
+/**
+ * Limpia la cita activa del almacenamiento local conservando nombre, teléfono y PIN
+ * para autocompletar futuros formularios.
+ */
+export const clearActiveBookingLocal = () => {
+  localStorage.removeItem('tonin_cita_activa');
+  localStorage.removeItem('tonin_cita');
+  localStorage.setItem('tonin_bookings', '[]');
+};
+
 const MisCitas = ({ onClose }) => {
   // Comprobar y normalizar si hay una cita activa guardada en localStorage
   const getStoredBooking = () => {
     try {
       const single = JSON.parse(localStorage.getItem('tonin_cita') || 'null');
+      let b = null;
       if (single && single.date && single.time) {
-        return {
+        b = {
           ...single,
           eventId: single.eventId || single.token || single.id,
           token: single.token || single.eventId || single.id,
           phone: single.phone || localStorage.getItem('tonin_cliente_telefono') || '',
           pin: single.pin || localStorage.getItem('tonin_pin') || ''
         };
+      } else {
+        const list = JSON.parse(localStorage.getItem('tonin_bookings') || '[]');
+        if (Array.isArray(list) && list.length > 0) {
+          const item = list[0];
+          b = {
+            ...item,
+            eventId: item.eventId || item.token || item.id,
+            token: item.token || item.eventId || item.id,
+            phone: item.phone || localStorage.getItem('tonin_cliente_telefono') || '',
+            pin: item.pin || localStorage.getItem('tonin_pin') || ''
+          };
+        }
       }
 
-      const list = JSON.parse(localStorage.getItem('tonin_bookings') || '[]');
-      if (Array.isArray(list) && list.length > 0) {
-        const b = list[0];
-        return {
-          ...b,
-          eventId: b.eventId || b.token || b.id,
-          token: b.token || b.eventId || b.id,
-          phone: b.phone || localStorage.getItem('tonin_cliente_telefono') || '',
-          pin: b.pin || localStorage.getItem('tonin_pin') || ''
-        };
+      // Si la cita ya pasó o fue concluida por el admin, liberamos el dispositivo
+      if (b && isBookingExpiredOrConcluded(b)) {
+        clearActiveBookingLocal();
+        return null;
       }
+
+      return b;
     } catch (e) {
       console.warn('Error leyendo cita de localStorage:', e);
     }
@@ -52,13 +115,40 @@ const MisCitas = ({ onClose }) => {
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  // Sincronizar estado si localStorage cambia
+  // Sincronizar estado si localStorage cambia y verificar con backend en background
   useEffect(() => {
     const stored = getStoredBooking();
     setActiveBooking(stored);
     if (stored) {
       if (stored.pin && !cancelPin) setCancelPin(stored.pin);
       if (stored.phone && !cancelPhone) setCancelPhone(stored.phone);
+
+      // Verificación en segundo plano con el backend para sincronizar estado attended/no_show
+      if (stored.phone && stored.pin) {
+        fetch('/api/mis-citas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: stored.phone, pin: stored.pin })
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data.cita) {
+              if (isBookingExpiredOrConcluded(data.cita)) {
+                clearActiveBookingLocal();
+                setActiveBooking(null);
+              } else {
+                const updated = { ...stored, ...data.cita };
+                localStorage.setItem('tonin_cita', JSON.stringify(updated));
+                localStorage.setItem('tonin_bookings', JSON.stringify([updated]));
+                setActiveBooking(updated);
+              }
+            } else if (data.error && data.error.includes('No tienes ninguna cita')) {
+              clearActiveBookingLocal();
+              setActiveBooking(null);
+            }
+          })
+          .catch(() => {});
+      }
     }
   }, []);
 
@@ -101,10 +191,7 @@ const MisCitas = ({ onClose }) => {
       }
 
       // Limpiar localStorage (conservando nombre y teléfono del cliente para futuros autocompletados)
-      localStorage.removeItem('tonin_cita_activa');
-      localStorage.removeItem('tonin_cita');
-      localStorage.setItem('tonin_bookings', '[]');
-
+      clearActiveBookingLocal();
       setActiveBooking(null);
       setSuccessMsg('Tu cita ha sido cancelada correctamente.');
     } catch (err) {
@@ -117,9 +204,7 @@ const MisCitas = ({ onClose }) => {
   // Opción para forzar limpieza local en caso de citas huérfanas o de prueba antiguas
   const handleForceClearLocal = () => {
     if (window.confirm('¿Deseas quitar esta cita de tu dispositivo?')) {
-      localStorage.removeItem('tonin_cita_activa');
-      localStorage.removeItem('tonin_cita');
-      localStorage.setItem('tonin_bookings', '[]');
+      clearActiveBookingLocal();
       setActiveBooking(null);
       setError('');
       setSuccessMsg('Cita quitada de este dispositivo.');
@@ -164,6 +249,14 @@ const MisCitas = ({ onClose }) => {
         throw new Error('No se encontraron citas para los datos facilitados.');
       }
 
+      // Si la cita ya concluyó (asistió, falló o pasó la hora), liberamos el estado y le avisamos
+      if (isBookingExpiredOrConcluded(foundCita)) {
+        clearActiveBookingLocal();
+        setActiveBooking(null);
+        setSuccessMsg(`Tu cita del ${foundCita.date} a las ${foundCita.time} ya ha concluido. Puedes reservar una nueva cita.`);
+        return;
+      }
+
       const newActive = {
         eventId: foundCita.eventId || foundCita.id,
         token: foundCita.eventId || foundCita.id,
@@ -171,7 +264,8 @@ const MisCitas = ({ onClose }) => {
         date: foundCita.date,
         time: foundCita.time,
         phone: formattedPhone,
-        pin: pin
+        pin: pin,
+        status: foundCita.status || 'pending'
       };
 
       // Guardar en localStorage para este navegador
@@ -184,7 +278,7 @@ const MisCitas = ({ onClose }) => {
       setCancelPin(pin);
       setCancelPhone(formattedPhone);
       setActiveBooking(newActive);
-      setSuccessMsg('¡Cita encontrada y guardada en este dispositivo!');
+      setSuccessMsg('¡Cita encontrada y sincronizada en este dispositivo!');
     } catch (err) {
       setError(err.message || 'Error al buscar tu cita.');
     } finally {
